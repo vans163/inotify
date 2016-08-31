@@ -39,6 +39,8 @@ init(Folder) ->
     self() ! tick,
     {ok, #{inotify_fd=> Fd, folder_fd=> Wd, dirPath=> FolderUnicode}}.
 
+%Remove a watched file descriptor
+handle_info({rm_watch, Fd, Wd}, S) -> ok = inotify:rm_watch(Fd, Wd);
 
 handle_info(tick, S=#{inotify_fd:= Fd}) ->
     case inotify:read(Fd) of
