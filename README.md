@@ -58,7 +58,6 @@ handle_info(tick, S=#{inotify_fd:= Fd}) ->
 
                     Event(T)
             end)(Events)
-            
     end,
 
     erlang:send_after(100, self(), tick),
