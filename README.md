@@ -10,6 +10,10 @@ Example: "말말" in shell is [47568,47568]. But we need [235,167,144,235,167,14
 to pass to the NIF.
 
 http://man7.org/linux/man-pages/man7/inotify.7.html  
+  
+To check inotify system limits:  
+ls /proc/sys/fs/inotify/  
+cat $_/*  
 
 ### Usage
 ```erlang
@@ -25,7 +29,7 @@ init(Folder) ->
     {ok, Fd} = inotify:init(),
     Mask = 0, %all events
     FolderUnicode = unicode:characters_to_binary(Folder),
-    
+
     {ok, Wd} = inotify:add_watch(Fd, Mask, FolderUnicode),
 
     self() ! tick,

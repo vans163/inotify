@@ -1,6 +1,3 @@
-//2.6.13
-//ls /proc/sys/fs/inotify/
-// cat $_/*
 #include "erl_nif.h"
 
 #include <sys/inotify.h>
@@ -43,14 +40,9 @@ static ERL_NIF_TERM add_watch(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
     char path[PATH_MAX] = {0};
     int wd = -1;
     if (enif_is_list(env, argv[2])) {
-        //NOTE: This works with korean, does with work with all cases? 
-        //말말 turns into [235,167,144,235,167,144]
         enif_get_string(env, argv[2], path, PATH_MAX, ERL_NIF_LATIN1);
         wd = inotify_add_watch(fd, path, mask);
     } else if (enif_inspect_binary(env, argv[2], &in)) {
-        //FIXME: This failed with korean
-        //<<"/home/user/project/inotify/말말">>
-        //말말 turns into 208 208, 0, 0
         in.data[in.size] = 0;
         wd = inotify_add_watch(fd, in.data, mask);
     } else {
@@ -167,7 +159,7 @@ invalid_event:
         );
         goto next_event;
     }
-    
+
     ERL_NIF_TERM retListInOrder;
     enif_make_reverse_list(env, retList, &retListInOrder);
 
