@@ -24,7 +24,7 @@ cat $_/*
 
 -compile(export_all).
 
-start_link(Folder) -> gen_server:start(?MODULE, Folder, []).
+start_link(Folder) -> gen_server:start_link(?MODULE, Folder, []).
 
 init(Folder) ->
     {ok, Fd} = inotify:init(),
