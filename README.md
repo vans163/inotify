@@ -5,7 +5,7 @@ Erlang inotify
 Linux kernel >= 2.6.13  
 
 ### Note
-If you are passing unicode paths make sure to unicode:characters_to_binary/1 or
+If you are passing unicode paths make sure to use unicode:characters_to_binary/1 or
 unicde:characters_to_list/1.  
 Example: "말말" in shell is [47568,47568]. But we need [235,167,144,235,167,144]
 to pass to the NIF.
