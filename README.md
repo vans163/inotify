@@ -8,7 +8,9 @@ Linux kernel >= 2.6.13
 If you are passing unicode paths make sure to use unicode:characters_to_binary/1 or
 unicode:characters_to_list/1.  
 Example: "말말" in shell is [47568,47568]. But we need [235,167,144,235,167,144]
-to pass to the NIF.
+to pass to the NIF.  
+  
+Make sure to use absolute paths filename:absname/1. 
 
 http://man7.org/linux/man-pages/man7/inotify.7.html  
   
@@ -29,7 +31,8 @@ start_link(Folder) -> gen_server:start_link(?MODULE, Folder, []).
 init(Folder) ->
     {ok, Fd} = inotify:init(),
     Mask = 0, %all events
-    FolderUnicode = unicode:characters_to_binary(Folder),
+    Absname = filename:absname(Folder),
+    FolderUnicode = unicode:characters_to_binary(Absname),
 
     {ok, Wd} = inotify:add_watch(Fd, Mask, FolderUnicode),
 
