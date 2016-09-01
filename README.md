@@ -13,6 +13,7 @@ to pass to the NIF.
 Make sure to use absolute paths filename:absname/1. 
 
 http://man7.org/linux/man-pages/man7/inotify.7.html  
+https://www.kernel.org/pub/linux/kernel/people/rml/inotify/headers/inotify.h  
   
 To check inotify system limits:  
 ls /proc/sys/fs/inotify/  
@@ -21,59 +22,13 @@ cat $_/*
 ### Usage
 ```erlang
 
--module(folder_watcher).
--behaviour(gen_server).
+%Look at inotify_folder_watcher.erl to implement custom watcher.
+%Default only sends message on a file changed.
 
--compile(export_all).
 
-start_link(Folder) -> gen_server:start_link(?MODULE, Folder, []).
-
-init(Folder) ->
-    {ok, Fd} = inotify:init(),
-    Mask = 0, %all events
-    Absname = filename:absname(Folder),
-    FolderUnicode = unicode:characters_to_binary(Absname),
-
-    {ok, Wd} = inotify:add_watch(Fd, Mask, FolderUnicode),
-
-    self() ! tick,
-    {ok, #{inotify_fd=> Fd, folder_fd=> Wd, dirPath=> FolderUnicode}}.
-
-%Remove a watched file descriptor
-handle_info({rm_watch, Fd, Wd}, S) -> ok = inotify:rm_watch(Fd, Wd);
-
-handle_info(tick, S=#{inotify_fd:= Fd}) ->
-    case inotify:read(Fd) of
-        {error, 11} -> 'EAGAIN';
-        {error, ErrCode} -> throw({"inotify:read failed with", ErrCode});
-
-        {ok, Events} ->
-            (fun Event([]) -> done;
-                 Event([ {inotify, invalid_event} |T]) -> Event(T);
-                 Event([ {inotify, Wd, Mask, Cookie, Filename} |T]) ->
-
-                    io:format("inotify ~p ~p ~p ~p\n", [Wd, Mask, Cookie, Filename]),
-
-                    CloseWrite = lists:member(close_write, Mask),
-                    %File written to and changed
-
-                    IsDir = lists:member(isdir, Mask),
-                    Create = lists:member(create, Mask),
-                    %New directory created, start monitoring it
-
-                    Event(T)
-            end)(Events)
-    end,
-
-    erlang:send_after(100, self(), tick),
-    {noreply, S};
-
-handle_info(Message, S) -> {noreply, S}.
-
-handle_call(Message, From, S) -> {reply, ok, S}.
-handle_cast(Message, S) -> {noreply, S}.
-
-terminate(_Reason, S) -> ok.
-code_change(_OldVersion, S, _Extra) -> {ok, S}. 
+inotify_folder_watcher:start_link({["/tmp", "/home/user"], self()}).
+receive
+    {inotify, changed, FileName} -> pass
+end.
 
 ```
