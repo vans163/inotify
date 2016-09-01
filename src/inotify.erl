@@ -4,15 +4,14 @@
 -export([init/0, add_watch/3, rm_watch/2, read/1]).
 
 load_nif() -> 
-    Path = case code:priv_dir(scv) of
+    PrivDir = case code:priv_dir(?MODULE) of
         {error, _} ->
-            EbinDir = filename:dirname(code:which(scv)),
+            EbinDir = filename:dirname(code:which(?MODULE)),
             AppPath = filename:dirname(EbinDir),
             filename:join(AppPath, "priv");
-        Pathe ->
-            Pathe
+        Path -> Path
     end,
-    FullPath = filename:join([Path, "inotify"]),
+    FullPath = filename:join(PrivDir, "inotify"),
     erlang:load_nif(FullPath, 0).
     
 init() -> "NIF library not loaded".
