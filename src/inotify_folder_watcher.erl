@@ -84,7 +84,7 @@ handle_info(tick, S) ->
                  Event([ {inotify, invalid_event} |T]) -> Event(T);
                  Event([ {inotify, Wd, Mask, Cookie, Filename} |T]) ->
 
-                    io:format("inotify ~p ~p ~p ~p\n", [Wd, Mask, Cookie, Filename]),
+                    %io:format("inotify ~p ~p ~p ~p\n", [Wd, Mask, Cookie, Filename]),
 
                     IsWritten = lists:member(close_write, Mask),
                     IsDir = lists:member(isdir, Mask),
