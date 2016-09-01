@@ -65,7 +65,7 @@ handle_info({watch_folders, Folders}, S) ->
     WdLookup = maps:get(wd_lookup, S),
 
     MoreWdLookup = recurse_folders(Fd, Folders),
-    {noreply, S#{fd_lookup=> maps:merge(WdLookup, MoreWdLookup)}};
+    {noreply, S#{wd_lookup=> maps:merge(WdLookup, MoreWdLookup)}};
 
 %Remove a watched file descriptor
 handle_info({rm_watch, Fd, Wd}, S) -> ok = inotify:rm_watch(Fd, Wd);
@@ -84,7 +84,7 @@ handle_info(tick, S) ->
                  Event([ {inotify, invalid_event} |T]) -> Event(T);
                  Event([ {inotify, Wd, Mask, Cookie, Filename} |T]) ->
 
-                    %io:format("inotify ~p ~p ~p ~p\n", [Wd, Mask, Cookie, Filename]),
+                    io:format("inotify ~p ~p ~p ~p\n", [Wd, Mask, Cookie, Filename]),
 
                     IsWritten = lists:member(close_write, Mask),
                     IsDir = lists:member(isdir, Mask),
@@ -93,15 +93,16 @@ handle_info(tick, S) ->
                     %File written to and changed
                     case {IsDir, IsWritten} of
                         {false, true} -> 
-                            AbsName = wd_lookup_absname(WdLookup, Wd, Filename),
-                            Parent ! {inotify, changed, AbsName};
+                            AbsName1 = wd_lookup_absname(WdLookup, Wd, Filename),
+                            Parent ! {inotify, changed, AbsName1};
                         _ -> pass
                     end,
 
                     %New directory created, start monitoring it
                     case {IsDir, Create} of
                         {true, true} -> 
-                            self() ! {watch_folders, [Filename]};
+                            AbsName2 = wd_lookup_absname(WdLookup, Wd, Filename),
+                            self() ! {watch_folders, [AbsName2]};
                         _ -> pass
                     end,
 
