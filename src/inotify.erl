@@ -12,7 +12,7 @@ load_nif() ->
         Path -> Path
     end,
     FullPath = filename:join(PrivDir, "inotify"),
-    R = erlang:load_nif(FullPath, 0).
+    erlang:load_nif(FullPath, 0).
     
 init() -> "NIF library not loaded".
 add_watch(_,_,_) -> "NIF library not loaded".
