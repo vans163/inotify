@@ -80,7 +80,7 @@ handle_info(tick, S) ->
         {error, ErrCode} -> throw({"inotify:read failed with", ErrCode}), S;
 
         {ok, Events} ->
-            lists:each(fun(E) ->
+            lists:foreach(fun(E) ->
                     case E of
                         {inotify, invalid_event} -> pass;
                         {inotify, Wd, Mask, Cookie, Filename} ->
