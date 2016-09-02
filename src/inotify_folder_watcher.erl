@@ -80,34 +80,32 @@ handle_info(tick, S) ->
         {error, ErrCode} -> throw({"inotify:read failed with", ErrCode}), S;
 
         {ok, Events} ->
-            (fun Event([]) -> done;
-                 Event([ {inotify, invalid_event} |T]) -> Event(T);
-                 Event([ {inotify, Wd, Mask, Cookie, Filename} |T]) ->
+            lists:each(fun(E) ->
+                    case E of
+                        {inotify, invalid_event} -> pass;
+                        {inotify, Wd, Mask, Cookie, Filename} ->
+                            IsWritten = lists:member(close_write, Mask),
+                            IsDir = lists:member(isdir, Mask),
+                            Create = lists:member(create, Mask),
 
-                    %io:format("inotify ~p ~p ~p ~p\n", [Wd, Mask, Cookie, Filename]),
+                            %File written to and changed
+                            case {IsDir, IsWritten} of
+                                {false, true} -> 
+                                    AbsName1 = wd_lookup_absname(WdLookup, Wd, Filename),
+                                    Parent ! {inotify, changed, AbsName1};
+                                _ -> pass
+                            end,
 
-                    IsWritten = lists:member(close_write, Mask),
-                    IsDir = lists:member(isdir, Mask),
-                    Create = lists:member(create, Mask),
-
-                    %File written to and changed
-                    case {IsDir, IsWritten} of
-                        {false, true} -> 
-                            AbsName1 = wd_lookup_absname(WdLookup, Wd, Filename),
-                            Parent ! {inotify, changed, AbsName1};
-                        _ -> pass
-                    end,
-
-                    %New directory created, start monitoring it
-                    case {IsDir, Create} of
-                        {true, true} -> 
-                            AbsName2 = wd_lookup_absname(WdLookup, Wd, Filename),
-                            self() ! {watch_folders, [AbsName2]};
-                        _ -> pass
-                    end,
-
-                    Event(T)
-            end)(Events)
+                            %New directory created, start monitoring it
+                            case {IsDir, Create} of
+                                {true, true} -> 
+                                    AbsName2 = wd_lookup_absname(WdLookup, Wd, Filename),
+                                    self() ! {watch_folders, [AbsName2]};
+                                _ -> pass
+                            end 
+                    end
+                end, Events
+            )
     end,
 
     erlang:send_after(?POLL_DELAY, self(), tick),
