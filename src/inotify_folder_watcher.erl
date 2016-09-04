@@ -6,6 +6,10 @@
 -define(POLL_DELAY, 10).
 -define(MASK, 16#4000410A). %ISDIR, CREATE, CLOSE_WRITE, Q_OVERFLOW, MODIFY
 
+watch_file(Pid, Path) -> Pid ! {watch_file, Path}.
+watch_folders(Pid, Folders) -> Pid ! {watch_folders, Folders}.
+
+
 start_link({Folders, Parent}) -> gen_server:start_link(?MODULE, {Folders, Parent}, []).
 
 init({Folders, Parent}) ->
@@ -17,18 +21,8 @@ init({Folders, Parent}) ->
     {ok, #{inotify_fd=> Fd, parent=> Parent, wd_lookup=> #{}}}.
 
 
-watch_file(Fd, File) ->
-    Absname = filename:absname(File),
-    FileUnicode = unicode:characters_to_binary(Absname),
-
-    %io:format("Watching ~p\n", [FileUnicode]),
-
-    {ok, Wd} = inotify:add_watch(Fd, ?MASK, FileUnicode),
-    {FileUnicode, Wd}.
-
-recurse_folders(Fd, Folders) -> recurse_folders(Fd, Folders, #{}).
-recurse_folders(Fd, [], Acc) -> Acc;
-recurse_folders(Fd, [Folder|T], Acc) ->
+recurse_folders(Fd, []) -> done;
+recurse_folders(Fd, [Folder|T]) ->
     AbsFolder = filename:absname(unicode:characters_to_binary(Folder)),
     IsDir = filelib:is_dir(AbsFolder),
 
@@ -36,19 +30,19 @@ recurse_folders(Fd, [Folder|T], Acc) ->
 
     case file:list_dir(AbsFolder) of
         {error, enotdir} -> 
-            recurse_folders(Fd, T, Acc);
+            recurse_folders(Fd, T);
 
         {error, enoent} when IsDir -> 
-            {UnicodeName, Wd} = watch_file(Fd, AbsFolder),
-            recurse_folders(Fd, T, Acc#{Wd=> UnicodeName});
+            self() ! {watch_file, AbsFolder},
+            recurse_folders(Fd, T);
 
         {error, _} -> 
-            recurse_folders(Fd, T, Acc);
+            recurse_folders(Fd, T);
 
         {ok, Files} ->
-            {UnicodeName, Wd} = watch_file(Fd, AbsFolder),
+            self() ! {watch_file, AbsFolder},
             Files2 = [filename:join(AbsFolder, unicode:characters_to_binary(X)) || X <- Files],
-            recurse_folders(Fd, T++Files2, Acc#{Wd=> UnicodeName})
+            recurse_folders(Fd, T++Files2)
     end
     .
 
@@ -62,10 +56,21 @@ wd_lookup_absname(WdLookup, Wd, Filename) ->
 %Add watched folders and recurse them
 handle_info({watch_folders, Folders}, S) ->
     Fd = maps:get(inotify_fd, S),
+    recurse_folders(Fd, Folders),
+    {noreply, S};
+
+
+%watch single file/folder
+handle_info({watch_file, Path}, S) ->
+    Fd = maps:get(inotify_fd, S),
     WdLookup = maps:get(wd_lookup, S),
 
-    MoreWdLookup = recurse_folders(Fd, Folders),
-    {noreply, S#{wd_lookup=> maps:merge(WdLookup, MoreWdLookup)}};
+    Absname = filename:absname(Path),
+    FileUnicode = filename:absname(Absname),
+
+    {ok, Wd} = inotify:add_watch(Fd, ?MASK, FileUnicode),
+
+    {noreply, S#{wd_lookup=> maps:merge(WdLookup, #{Wd=> FileUnicode})}};
 
 %Remove a watched file descriptor
 handle_info({rm_watch, Fd, Wd}, S) -> ok = inotify:rm_watch(Fd, Wd);
