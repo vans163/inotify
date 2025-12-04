@@ -3,7 +3,6 @@
 
 -compile(export_all).
 
--define(POLL_DELAY, 10).
 -define(MASK, 16#4000410A). %ISDIR, CREATE, CLOSE_WRITE, Q_OVERFLOW, MODIFY
 
 watch_file(Pid, Path) -> Pid ! {watch_file, Path}.
@@ -16,7 +15,6 @@ init({Folders, Parent}) ->
     {ok, Fd} = inotify:init(),
 
     self() ! {watch_folders, Folders},
-    self() ! tick,
 
     {ok, #{inotify_fd=> Fd, parent=> Parent, wd_lookup=> #{}}}.
 
@@ -113,7 +111,6 @@ handle_info(tick, S) ->
             )
     end,
 
-    erlang:send_after(?POLL_DELAY, self(), tick),
     {noreply, S};
 
 handle_info(Message, S) -> {noreply, S}.
