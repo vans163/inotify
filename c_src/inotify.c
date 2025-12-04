@@ -44,7 +44,7 @@ static ERL_NIF_TERM add_watch(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
         wd = inotify_add_watch(fd, path, mask);
     } else if (enif_inspect_binary(env, argv[2], &in)) {
         in.data[in.size] = 0;
-        wd = inotify_add_watch(fd, in.data, mask);
+        wd = inotify_add_watch(fd, (const char *)in.data, mask);
     } else {
         return mk_error(env, "filename not_a_list or binary");
     }
@@ -65,7 +65,7 @@ static ERL_NIF_TERM rm_watch(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
     if (!enif_get_int(env, argv[1], &wd))
         return mk_error(env, "argv1 not_a_number");
 
-    if (inotify_rm_watch(fd, wd) != 0) 
+    if (inotify_rm_watch(fd, wd) != 0)
         return mk_errno(env);
 
     return mk_atom(env, "ok");
@@ -84,7 +84,7 @@ static ERL_NIF_TERM inotify_read(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
         return mk_errno(env);
 
     //We got EAGAIN most likely
-    if (n <= 0) 
+    if (n <= 0)
         return mk_errno(env);
 
     ERL_NIF_TERM retList = enif_make_list(env, 0);
@@ -136,7 +136,7 @@ static ERL_NIF_TERM inotify_read(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
         if (mask & IN_OPEN)          maskList = enif_make_list_cell(env, mk_atom(env, "open"), maskList);
         if (mask & IN_Q_OVERFLOW)    maskList = enif_make_list_cell(env, mk_atom(env, "q_overflow"), maskList);
         if (mask & IN_UNMOUNT)       maskList = enif_make_list_cell(env, mk_atom(env, "unmount"), maskList);
-        
+
         ret = enif_make_tuple5(env,
             mk_atom(env, "inotify"),
             enif_make_int(env, wd),
