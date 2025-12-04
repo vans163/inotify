@@ -8,26 +8,45 @@
 #include <unistd.h>
 #include <stdio.h>
 
+static ErlNifResourceType * inotify_fd_resource;
+
 #define INOTIFY_BUF_LEN (10 * (sizeof(struct inotify_event) + NAME_MAX + 1))
 
 ERL_NIF_TERM mk_atom(ErlNifEnv*,const char*);
 ERL_NIF_TERM mk_error(ErlNifEnv*, const char*);
 ERL_NIF_TERM mk_errno(ErlNifEnv*);
 
+static int subscribe(ErlNifEnv* env, int *fd) {
+    ErlNifPid self;
+    if (!enif_self(env, &self))
+        return -1;
+
+    return enif_select_read(env, *fd, fd, &self, mk_atom(env, "tick"), NULL);
+}
+
 static ERL_NIF_TERM init(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    int res = inotify_init1(IN_NONBLOCK);
-    if (res < 0)
+    int *fd = enif_alloc_resource(inotify_fd_resource, sizeof(int));
+    if (!fd)
+        return errno = ENOMEM, mk_errno(env);
+
+    *fd = inotify_init1(IN_NONBLOCK);
+    if (*fd < 0)
         return mk_errno(env);
 
-    return enif_make_tuple2(env, mk_atom(env, "ok"), enif_make_int(env, res));
+    if (subscribe(env, fd))
+        return mk_error(env, "select_read");
+
+    ERL_NIF_TERM ret = enif_make_resource(env, fd);
+    enif_release_resource(fd);
+    return enif_make_tuple2(env, mk_atom(env, "ok"), ret);
 }
 
 static ERL_NIF_TERM add_watch(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    int fd = -1;
-    if (!enif_get_int(env, argv[0], &fd))
-        return mk_error(env, "argv0 not_a_number");
+    int *fd;
+    if (!enif_get_resource(env, argv[0], inotify_fd_resource, (void **)&fd))
+        return mk_error(env, "argv0 not_inotify_fd");
 
     uint32_t mask = -1;
     if (!enif_get_uint(env, argv[1], &mask))
@@ -41,10 +60,10 @@ static ERL_NIF_TERM add_watch(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
     int wd = -1;
     if (enif_is_list(env, argv[2])) {
         enif_get_string(env, argv[2], path, PATH_MAX, ERL_NIF_LATIN1);
-        wd = inotify_add_watch(fd, path, mask);
+        wd = inotify_add_watch(*fd, path, mask);
     } else if (enif_inspect_binary(env, argv[2], &in)) {
         in.data[in.size] = 0;
-        wd = inotify_add_watch(fd, (const char *)in.data, mask);
+        wd = inotify_add_watch(*fd, (const char *)in.data, mask);
     } else {
         return mk_error(env, "filename not_a_list or binary");
     }
@@ -57,15 +76,15 @@ static ERL_NIF_TERM add_watch(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 
 static ERL_NIF_TERM rm_watch(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    int fd = -1;
-    if (!enif_get_int(env, argv[0], &fd))
-        return mk_error(env, "argv0 not_a_number");
+    int *fd;
+    if (!enif_get_resource(env, argv[0], inotify_fd_resource, (void **)&fd))
+        return mk_error(env, "argv0 not_inotify_fd");
 
     int wd = -1;
     if (!enif_get_int(env, argv[1], &wd))
         return mk_error(env, "argv1 not_a_number");
 
-    if (inotify_rm_watch(fd, wd) != 0)
+    if (inotify_rm_watch(*fd, wd) != 0)
         return mk_errno(env);
 
     return mk_atom(env, "ok");
@@ -73,13 +92,16 @@ static ERL_NIF_TERM rm_watch(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 
 static ERL_NIF_TERM inotify_read(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    int fd = -1;
-    if (!enif_get_int(env, argv[0], &fd))
-        return mk_error(env, "argv0 not_a_number");
+    int *fd;
+    if (!enif_get_resource(env, argv[0], inotify_fd_resource, (void **)&fd))
+        return mk_error(env, "argv0 not_inotify_fd");
+
+    if (subscribe(env, fd))
+        return mk_error(env, "select_read");
 
     char buf[INOTIFY_BUF_LEN] __attribute__ ((aligned(8)));
 
-    ssize_t n = read(fd, buf, INOTIFY_BUF_LEN);
+    ssize_t n = read(*fd, buf, INOTIFY_BUF_LEN);
     if (n == -1 && errno != EAGAIN)
         return mk_errno(env);
 
@@ -203,4 +225,18 @@ static ErlNifFunc nif_funcs[] =
     {"read", 1, inotify_read},
 };
 
-ERL_NIF_INIT(inotify,nif_funcs,NULL,NULL,&upgrade,NULL)
+static void free_inotify_fd(ErlNifEnv* env, void* obj)
+{
+    int *fd = obj;
+    enif_select(env, *fd, ERL_NIF_SELECT_STOP, fd, 0, 0);
+    close(*fd);
+}
+
+static int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
+{
+    inotify_fd_resource = enif_open_resource_type(env, NULL, "inotify_fd", free_inotify_fd, ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER, NULL);
+
+    return 0;
+}
+
+ERL_NIF_INIT(inotify,nif_funcs,load,NULL,&upgrade,NULL)
