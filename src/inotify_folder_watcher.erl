@@ -50,6 +50,13 @@ wd_lookup_absname(WdLookup, Wd, Filename) ->
         Abspath -> filename:join(Abspath, Filename)
     end.
 
+wd_rev_lookup(WdLookupIter, Absname) ->
+    case maps:next(WdLookupIter) of
+        {Wd, Absname, _} -> Wd;
+        {_, _, NextIter} -> wd_rev_lookup(NextIter, Absname);
+        none -> {error, notfound}
+    end.
+
 
 %Add watched folders and recurse them
 handle_info({watch_folders, Folders}, S) ->
@@ -70,8 +77,17 @@ handle_info({watch_file, Path}, S) ->
 
     {noreply, S#{wd_lookup=> maps:merge(WdLookup, #{Wd=> FileUnicode})}};
 
-%Remove a watched file descriptor
-handle_info({rm_watch, Fd, Wd}, S) -> ok = inotify:rm_watch(Fd, Wd);
+%Remove a watched file/folder
+handle_info({rm_watch, Path}, S) ->
+    Fd = maps:get(inotify_fd, S),
+    WdLookup = maps:get(wd_lookup, S),
+
+    Absname = filename:absname(Path),
+    Wd = wd_rev_lookup(maps:iterator(WdLookup), Absname),
+
+    ok = inotify:rm_watch(Fd, Wd),
+
+    {noreply, S#{wd_lookup=> maps:remove(Wd, WdLookup)}};
 
 handle_info(tick, S) ->
     Fd = maps:get(inotify_fd, S),
