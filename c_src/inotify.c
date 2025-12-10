@@ -38,17 +38,18 @@ static ERL_NIF_TERM add_watch(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 
     ErlNifBinary in;
     char path[PATH_MAX] = {0};
-    int wd = -1;
     if (enif_is_list(env, argv[2])) {
         enif_get_string(env, argv[2], path, PATH_MAX, ERL_NIF_LATIN1);
-        wd = inotify_add_watch(fd, path, mask);
     } else if (enif_inspect_binary(env, argv[2], &in)) {
-        in.data[in.size] = 0;
-        wd = inotify_add_watch(fd, in.data, mask);
+        if (in.size > PATH_MAX)
+            return errno = ENAMETOOLONG, mk_errno(env);
+
+        memcpy(path, in.data, in.size);
     } else {
         return mk_error(env, "filename not_a_list or binary");
     }
 
+    int wd = inotify_add_watch(fd, path, mask);
     if (wd < 0)
         return mk_errno(env);
 
