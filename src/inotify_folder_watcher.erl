@@ -21,7 +21,7 @@ init({Folders, Parent}) ->
 
 recurse_folders(Fd, []) -> done;
 recurse_folders(Fd, [Folder|T]) ->
-    AbsFolder = filename:absname(unicode:characters_to_binary(Folder)),
+    AbsFolder = filename:absname(Folder),
     IsDir = filelib:is_dir(AbsFolder),
 
     %io:format("abstocheck ~p \n", [AbsFolder]),
@@ -39,7 +39,7 @@ recurse_folders(Fd, [Folder|T]) ->
 
         {ok, Files} ->
             self() ! {watch_file, AbsFolder},
-            Files2 = [filename:join(AbsFolder, unicode:characters_to_binary(X)) || X <- Files],
+            Files2 = [filename:join(AbsFolder, X) || X <- Files],
             recurse_folders(Fd, T++Files2)
     end
     .
